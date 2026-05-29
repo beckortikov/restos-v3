@@ -1,0 +1,87 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.python-version.local
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.spec.bak
+
+# Django
+*.sqlite3
+*.sqlite3-journal
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+printouts/                   # PRINTER_VIRTUAL output
+
+# PySide / Qt
+*.qm
+.qt-cache/
+
+# Secrets / env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Node (waiter / dashboard)
+node_modules/
+.next/
+out/
+.turbo/
+.nuxt/
+.output/
+.cache/
+*.tsbuildinfo
+pnpm-debug.log*
+yarn-error.log*
+npm-debug.log*
+
+# Capacitor / Android (waiter)
+android/app/build/
+android/.gradle/
+android/local.properties
+apps/waiter/.gradle/
+apps/waiter/build/
+apps/waiter/app/build/
+apps/waiter/.idea/
+*.apk
+*.aab
+*.keystore
+
+# Logs
+*.log
+logs/
+
+# Local credentials (примеры команд запуска)
+credentials.md
+
+# PyInstaller artifacts
+apps/pos/build/
+apps/pos/dist/
+*.spec.bak
+
+# Plan files (Claude internal)
+.claude/plans/
+
+# CI helpers
+.tmp/

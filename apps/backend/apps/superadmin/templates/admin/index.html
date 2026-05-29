@@ -1,0 +1,112 @@
+{% extends 'admin/base.html' %}
+{% load i18n %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+    {% include "unfold/helpers/site_branding.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="px-4 py-4">
+
+  {# ── KPI tiles ──────────────────────────────────────────────────── #}
+  {% if kpi %}
+    <div class="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
+      {% for k in kpi %}
+        <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded-default p-5 shadow-xs">
+          <div class="font-medium text-base-500 text-sm">{{ k.title }}</div>
+          <div class="font-bold text-3xl mt-2 text-base-900 dark:text-white">{{ k.metric }}</div>
+          {% if k.footer %}
+            <div class="mt-2 text-sm text-base-500">{{ k.footer|safe }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-8">
+
+    {# ── Истекают скоро ──────────────────────────────────────────── #}
+    <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded-default p-5 shadow-xs">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-base-900 dark:text-white">
+          ⚠ Лицензии истекают (2 недели)
+        </h2>
+        <a href="{% url 'admin:licensing_license_changelist' %}?lic_status=expiring_soon"
+           class="text-primary-600 text-sm font-medium hover:underline">
+          все →
+        </a>
+      </div>
+      {% if expiring_soon_licenses %}
+        <table class="w-full text-sm">
+          <thead class="text-xs text-base-500 uppercase">
+            <tr>
+              <th class="text-left py-2">Ресторан</th>
+              <th class="text-left py-2">Тариф</th>
+              <th class="text-right py-2">Истекает</th>
+              <th class="text-right py-2">Дней</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for lic in expiring_soon_licenses %}
+            <tr class="border-t border-base-100 dark:border-base-800">
+              <td class="py-2">
+                <a href="{% url 'admin:users_restaurant_change' lic.id %}"
+                   class="text-primary-600 hover:underline">{{ lic.name }}</a>
+              </td>
+              <td class="py-2 text-base-600">{{ lic.plan }}</td>
+              <td class="py-2 text-right text-base-600">{{ lic.expires_at|date:"d.m.Y" }}</td>
+              <td class="py-2 text-right">
+                <span class="{% if lic.days_left <= 3 %}text-red-600 font-semibold{% elif lic.days_left <= 7 %}text-yellow-600{% else %}text-base-600{% endif %}">
+                  {{ lic.days_left }} дн.
+                </span>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-base-500 text-sm">Нет лицензий с приближающимся окончанием 🎉</p>
+      {% endif %}
+    </div>
+
+    {# ── Недавно добавленные рестораны ───────────────────────────── #}
+    <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded-default p-5 shadow-xs">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-base-900 dark:text-white">
+          🆕 Недавно добавленные рестораны
+        </h2>
+        <a href="{% url 'admin:users_restaurant_changelist' %}"
+           class="text-primary-600 text-sm font-medium hover:underline">
+          все →
+        </a>
+      </div>
+      {% if recent_restaurants %}
+        <ul class="space-y-2">
+          {% for r in recent_restaurants %}
+            <li class="flex items-center justify-between border-b border-base-100 dark:border-base-800 pb-2 last:border-0">
+              <a href="{% url 'admin:users_restaurant_change' r.id %}"
+                 class="text-primary-600 hover:underline font-medium">{{ r.name }}</a>
+              <span class="text-base-500 text-xs">{{ r.created_at|date:"d.m.Y H:i" }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-base-500 text-sm">Пока пусто.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ── Стандартный app_list ниже (как в default unfold index) ────── #}
+  <h2 class="font-semibold mt-10 mb-4 text-base-900 dark:text-white">Все модели</h2>
+  <div class="flex flex-col lg:flex-row lg:gap-8">
+    <div class="grow">
+      {% include "unfold/helpers/app_list_default.html" %}
+    </div>
+    {% include "unfold/helpers/history.html" %}
+  </div>
+
+</div>
+{% endblock %}

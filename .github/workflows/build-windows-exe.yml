@@ -1,0 +1,78 @@
+name: Build Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name (e.g. v0.1.0-dev)'
+        required: false
+        default: 'manual-build'
+
+permissions:
+  contents: write  # для создания GitHub Release
+
+jobs:
+  build:
+    name: Build .exe (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'apps/pos/pyproject.toml'
+
+      - name: Install POS deps + PyInstaller
+        working-directory: apps/pos
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Build EXE
+        working-directory: apps/pos
+        run: |
+          pyinstaller pos.spec --noconfirm --clean
+
+      - name: Compute archive name
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="${{ github.event.inputs.release_name || 'manual' }}-${GITHUB_SHA::8}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "archive=RestOS-POS-${VERSION}-win64.zip" >> $GITHUB_OUTPUT
+
+      - name: Zip release folder
+        working-directory: apps/pos/dist
+        shell: powershell
+        run: |
+          Compress-Archive -Path RestOS-POS -DestinationPath "${{ steps.meta.outputs.archive }}"
+
+      - name: Upload artifact (для проверки до релиза)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.archive }}
+          path: apps/pos/dist/${{ steps.meta.outputs.archive }}
+          retention-days: 14
+
+      # ---- релиз только для тегов v* ----
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: apps/pos/dist/${{ steps.meta.outputs.archive }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
