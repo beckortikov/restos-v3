@@ -54,6 +54,38 @@ restos-v3/
 | Node | 22 (для waiter и dashboard) |
 | pnpm | 9.x |
 
+## Быстрый запуск (Docker Compose)
+
+Backend + Postgres поднимаются одной командой:
+
+```bash
+cp .env.example .env
+# отредактируй .env — поменяй DJANGO_SECRET_KEY и DJANGO_SUPERUSER_PASSWORD
+docker compose up -d
+
+# проверка
+curl http://localhost:8000/api/v1/health/   # {"status":"ok","db":true}
+open http://localhost:8000/admin/           # admin / задал в .env
+```
+
+Что произойдёт:
+1. `postgres:16-alpine` контейнер стартует с persistent volume `postgres_data`
+2. Backend `restos-backend` ждёт `pg_isready` → применяет миграции → создаёт суперюзера (если задан `DJANGO_SUPERUSER_*`) → стартует gunicorn на `:8000`
+3. Healthcheck `/api/v1/health/` каждые 15с
+
+Управление:
+```bash
+docker compose logs -f backend     # стрим логов
+docker compose restart backend     # рестарт после правки кода
+docker compose down                # стоп (данные сохраняются)
+docker compose down -v             # стоп + удаление БД (полный сброс)
+```
+
+Образ backend опубликован в GHCR (собирается на push в main / тег v*):
+```bash
+docker pull ghcr.io/beckortikov/restos-v3/backend:latest
+```
+
 ## Команды
 
 См. README в каждом `apps/<name>/`.

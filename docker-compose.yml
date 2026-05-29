@@ -1,0 +1,74 @@
+# RestOS v3 — Postgres + Backend, поднимается одной командой
+#
+# Запуск:
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Логи: docker compose logs -f backend
+# Остановка: docker compose down
+# Полный сброс (с удалением БД): docker compose down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-restos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-restos}
+      POSTGRES_DB: ${POSTGRES_DB:-restos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-restos} -d ${POSTGRES_DB:-restos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: restos-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # БД — внутри docker network имя сервиса == hostname
+      DATABASE_URL: postgres://${POSTGRES_USER:-restos}:${POSTGRES_PASSWORD:-restos}@postgres:5432/${POSTGRES_DB:-restos}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
+      CORS_ALLOWED_ORIGIN_REGEXES: ${CORS_ALLOWED_ORIGIN_REGEXES:-}
+      JWT_ACCESS_LIFETIME_HOURS: ${JWT_ACCESS_LIFETIME_HOURS:-8}
+      JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-30}
+      PIN_SESSION_TIMEOUT_MIN: ${PIN_SESSION_TIMEOUT_MIN:-30}
+      PRINTER_VIRTUAL: ${PRINTER_VIRTUAL:-True}
+      PRINTER_OUTPUT_DIR: /app/printouts
+      # Авто-superuser при первом старте
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-}
+    volumes:
+      # Чтобы выводы виртуального принтера и медиа сохранялись между перезапусками
+      - backend_printouts:/app/printouts
+      - backend_media:/app/media
+      - backend_static:/app/staticfiles
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  backend_printouts:
+  backend_media:
+  backend_static:

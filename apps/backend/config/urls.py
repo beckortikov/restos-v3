@@ -1,8 +1,23 @@
 from django.conf import settings
 from django.contrib import admin
+from django.db import connection
+from django.http import JsonResponse
 from django.urls import include, path
 
+
+def health_view(_request):
+    """Liveness + readiness probe для docker-compose / k8s."""
+    try:
+        with connection.cursor() as c:
+            c.execute("SELECT 1")
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return JsonResponse({"status": "ok" if db_ok else "degraded", "db": db_ok})
+
+
 api_v1 = [
+    path("health/", health_view, name="health"),
     path("", include("apps.users.urls")),
     path("tables/", include("apps.tables.urls")),
     path("menu/", include("apps.menu.urls")),
