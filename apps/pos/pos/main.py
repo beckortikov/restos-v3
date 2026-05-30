@@ -654,17 +654,40 @@ def _apply_light_palette(app: QApplication) -> None:
     app.setPalette(p)
 
 
+def _maybe_start_embedded_backend() -> "EmbeddedBackend | None":
+    """Если RESTOS_EMBEDDED=1 (или это PyInstaller bundle) — поднимаем
+    Postgres + Django внутри этого же exe. Иначе используем external backend
+    (через RESTOS_API_URL)."""
+    import os
+    flag = os.environ.get("RESTOS_EMBEDDED", "")
+    is_frozen = getattr(sys, "frozen", False)
+    if not (flag == "1" or is_frozen):
+        return None
+
+    # Splash в Qt будет позже; пока — print.
+    print("→ Starting embedded backend (Postgres + Django)...")
+    try:
+        from pos.services.embedded_backend import EmbeddedBackend
+        eb = EmbeddedBackend(port=8000)
+        eb.start(on_progress=lambda m: print(f"  · {m}"))
+        return eb
+    except Exception as exc:
+        print(f"!! Embedded backend failed: {exc}")
+        raise
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+    # SA-7+ single-exe: backend поднимается прежде чем GUI.
+    embedded = _maybe_start_embedded_backend()
+
     app = QApplication(sys.argv)
     app.setApplicationName("RestOS Cashier")
     app.setOrganizationName("RestOS")
-    # Forcing light theme — macOS dark mode иначе бьёт по диалогам/системным
-    # виджетам (QDialog/QComboBox/QSpinBox без явного фона становятся
-    # тёмно-серыми). Fusion-стиль игнорирует platform-palette и берёт нашу.
     _apply_light_palette(app)
     app.setStyleSheet(
         "QWidget { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; }"
@@ -673,6 +696,11 @@ def main() -> int:
     print(f"API base URL: {API_BASE_URL}")
     window = MainWindow()
     window.show()
+
+    # При выходе — корректно остановить backend
+    if embedded is not None:
+        app.aboutToQuit.connect(embedded.stop)
+
     return app.exec()
 
 

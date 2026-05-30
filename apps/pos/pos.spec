@@ -1,63 +1,123 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec для RestOS POS (Windows .exe).
+"""PyInstaller spec для RestOS POS (Single-exe с embedded backend).
+
+Single-exe бандлит:
+- PySide6 GUI кассира
+- Django backend (apps/backend) — поднимается через EmbeddedBackend
+- Postgres binaries — через pgserver (он сам тащит portable bundle)
+- pgserver — Python библиотека для embedded Postgres
+
+При запуске EmbeddedBackend поднимет Postgres + Django, потом загрузится GUI.
 
 Запуск локально:
     cd apps/pos
-    pyinstaller pos.spec --noconfirm --clean
-
-Результат:
-    apps/pos/dist/RestOS-POS/RestOS-POS.exe  (+ нужные DLL/PySide6 plugins)
+    .venv/bin/pyinstaller pos.spec --noconfirm --clean
 """
-import os
-import sys
 from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
 ROOT = Path(SPECPATH).resolve()
-# Дополнительные ресурсы (иконки, fonts, токены, qss)
+REPO_ROOT = ROOT.parent.parent  # apps/pos → repo root
+BACKEND_DIR = REPO_ROOT / "apps" / "backend"
+
+# ── datas: ресурсы POS + код Django ───────────────────────────────────────
 datas = []
+
+# POS-ресурсы (иконки, токены, QSS)
 for sub in ("resources",):
     src = ROOT / "pos" / sub
     if src.exists():
         datas.append((str(src), f"pos/{sub}"))
 
-hiddenimports = [
-    # PySide6 ядро
+# Embedded backend — копируем весь Django проект в bundle/backend/
+# EmbeddedBackend.sys.path.insert(0, sys._MEIPASS/backend) — поднимется оттуда.
+if BACKEND_DIR.exists():
+    # Каждый Django app: код + миграции + templates
+    for sub in ("apps", "config", "common"):
+        s = BACKEND_DIR / sub
+        if s.exists():
+            datas.append((str(s), f"backend/{sub}"))
+    # manage.py чтобы можно было ./RestOS-POS.exe migrate если кто-то захочет
+    mp = BACKEND_DIR / "manage.py"
+    if mp.exists():
+        datas.append((str(mp), "backend"))
+
+# pgserver — нужны его data-файлы (postgres bundle path resolver)
+datas += collect_data_files("pgserver")
+
+# Django + DRF + Unfold — их templates/static
+for pkg in ("django", "rest_framework", "unfold"):
+    try:
+        datas += collect_data_files(pkg, includes=["**/*.html", "**/*.txt", "**/*.po", "**/*.mo", "**/*.json"])
+    except Exception:
+        pass
+
+# ── hiddenimports: всё что Django может импортировать динамически ─────────
+hiddenimports: list[str] = [
+    # PySide6
     "PySide6.QtCore",
     "PySide6.QtGui",
     "PySide6.QtWidgets",
     "PySide6.QtNetwork",
     "PySide6.QtSvg",
-    # http/sse
+    # POS deps
     "requests",
     "sseclient",
-    # keyring backends — на Windows нужен windows backend
+    "segno",
+    # keyring backends
     "keyring.backends.Windows",
     "keyring.backends.SecretService",
     "keyring.backends.macOS",
-    # QR-генератор
-    "segno",
-    # opt-cache (если есть)
-    "apsw",
+    # Embedded backend Python deps
+    "pgserver",
+    "waitress",
+    "psycopg",
+    "psycopg.adapters",
+    "psycopg_binary",
+    "django",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "django_filters",
+    "corsheaders",
+    "unfold",
+    "environ",
+    "openpyxl",
+    "bcrypt",
+    "PIL",
 ]
+
+# Все наши Django apps (apps.*) — submodule scan чтобы migrations попали тоже
+try:
+    import sys
+    sys.path.insert(0, str(BACKEND_DIR))
+    for app in ("apps", "config", "common"):
+        try:
+            hiddenimports += collect_submodules(app)
+        except Exception:
+            pass
+    sys.path.remove(str(BACKEND_DIR))
+except Exception:
+    pass
 
 a = Analysis(
     ["pos/__main__.py"],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(BACKEND_DIR)],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        # Не нужны в exe — экономим размер
-        "tkinter",
-        "test",
-        "unittest",
-        "pytest",
-    ],
+    excludes=["tkinter", "test", "unittest", "pytest"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -75,12 +135,12 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,            # GUI-приложение, без консольного окна
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,                # TODO: добавить .ico когда будет
+    icon=None,
 )
 
 coll = COLLECT(
