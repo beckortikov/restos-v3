@@ -2,7 +2,7 @@ import logging
 import sys
 
 # Версия POS-клиента — отправляется в heartbeat для super-admin'а
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 
 # SA-7+ — на Windows скрыть console-окна subprocess'ов (postgres.exe, pg_ctl.exe).
 # Применяется до любых import'ов, которые могут spawn'ить child процессы.

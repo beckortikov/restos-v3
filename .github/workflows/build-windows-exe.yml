@@ -34,6 +34,35 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # pgserver на Windows не включает tzdata → Postgres падает на
+      # `SET TIME ZONE 'Asia/Dushanbe'`. Берём готовый Postgres-бандл от
+      # zonky.io (его же использует embedded-postgres в Go) — там tzdata есть.
+      # Распаковываем только share/timezone + share/timezonesets в pgserver.
+      - name: Inject Postgres tzdata into pgserver
+        shell: pwsh
+        run: |
+          $ver = "16.4.0"
+          $jar = "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-windows-amd64/$ver/embedded-postgres-binaries-windows-amd64-$ver.jar"
+          $tmp = Join-Path $env:RUNNER_TEMP "pgbin"
+          New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+          Write-Host "Downloading zonky Postgres binaries..."
+          Invoke-WebRequest -Uri $jar -OutFile "$tmp\pg.jar"
+          # JAR — это zip. Внутри — postgres-windows-x86_64.txz (tar.xz).
+          Expand-Archive -Path "$tmp\pg.jar" -DestinationPath "$tmp\jar" -Force
+          $txz = Get-ChildItem -Path "$tmp\jar" -Recurse -Filter "*.txz" | Select-Object -First 1
+          Write-Host "Extracting $($txz.FullName)..."
+          # tar входит в Windows 10+
+          tar -xf $txz.FullName -C "$tmp\jar"
+          # pgserver location
+          $pgsv = python -c "import pgserver, os; print(os.path.dirname(pgserver.__file__))"
+          $dest = Join-Path $pgsv "pginstall\share"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Write-Host "Copying tzdata to $dest"
+          Copy-Item -Recurse -Force "$tmp\jar\share\timezone" $dest
+          Copy-Item -Recurse -Force "$tmp\jar\share\timezonesets" $dest
+          Write-Host "tzdata installed:"
+          Get-ChildItem "$dest\timezone\Asia" | Select-Object -First 5
+
       - name: Build EXE (PyInstaller)
         working-directory: apps/pos
         run: |
