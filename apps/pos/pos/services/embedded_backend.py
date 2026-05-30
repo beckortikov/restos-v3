@@ -99,13 +99,28 @@ class PgSupervisor:
         """Запустить (или подключиться к уже запущенному) Postgres."""
         try:
             import pgserver
+            from pgserver import postgres_server as _ps_mod
         except ImportError as e:
             raise RuntimeError(
                 "pgserver не установлен. Добавьте в pyproject.toml: pgserver",
             ) from e
 
+        # pgserver хардкодит timeout=10 при вызове pg_ctl start. На Windows при
+        # первом запуске (антивирус сканирует pg_ctl.exe/postgres.exe, холодный
+        # диск, initdb) этого не хватает → TimeoutExpired. Патчим pg_ctl чтобы
+        # принудительно увеличивать timeout до 120 секунд.
+        _orig_pg_ctl = _ps_mod.pg_ctl
+        if not getattr(_orig_pg_ctl, "_restos_timeout_patched", False):
+            def _patched_pg_ctl(args, **kwargs):
+                t = kwargs.get("timeout")
+                if t is None or t < 120:
+                    kwargs["timeout"] = 120
+                return _orig_pg_ctl(args, **kwargs)
+            _patched_pg_ctl._restos_timeout_patched = True  # type: ignore[attr-defined]
+            _ps_mod.pg_ctl = _patched_pg_ctl
+
         self._data_dir.mkdir(parents=True, exist_ok=True)
-        log.info("→ Starting embedded Postgres in %s", self._data_dir)
+        log.info("→ Starting embedded Postgres in %s (timeout=120s)", self._data_dir)
         # get_server() = idempotent: initdb если первый раз, start если остановлен.
         # cleanup_mode=None — не останавливать на выходе python, мы сами через stop().
         self._server = pgserver.get_server(
@@ -282,7 +297,7 @@ class EmbeddedBackend:
         self.django.start()
 
         _p("Проверяем готовность…")
-        if not self.django.wait_for_health(timeout=60):
+        if not self.django.wait_for_health(timeout=120):
             raise RuntimeError(
                 "Backend не отвечает на /api/v1/health/. "
                 "Посмотрите логи в %APPDATA%/RestOS/embedded.log",
