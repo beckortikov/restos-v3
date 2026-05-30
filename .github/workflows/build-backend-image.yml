@@ -3,12 +3,7 @@ name: Build Backend Image
 on:
   push:
     branches: [main]
-    paths:
-      - 'apps/backend/**'
-      - '.github/workflows/build-backend-image.yml'
-  push_tags:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
 
 env:
