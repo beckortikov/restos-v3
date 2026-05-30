@@ -34,22 +34,26 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Build EXE
+      - name: Build EXE (PyInstaller)
         working-directory: apps/pos
         run: |
           pyinstaller pos.spec --noconfirm --clean
 
-      - name: Compute archive name
+      - name: Compute version
         id: meta
         shell: bash
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
+            VERSION_CLEAN="${VERSION#v}"
           else
             VERSION="${{ github.event.inputs.release_name || 'manual' }}-${GITHUB_SHA::8}"
+            VERSION_CLEAN="0.0.0-${GITHUB_SHA::8}"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_clean=${VERSION_CLEAN}" >> $GITHUB_OUTPUT
           echo "archive=RestOS-POS-${VERSION}-win64.zip" >> $GITHUB_OUTPUT
+          echo "installer=RestOS-POS-Setup-${VERSION_CLEAN}.exe" >> $GITHUB_OUTPUT
 
       - name: Zip release folder
         working-directory: apps/pos/dist
@@ -57,11 +61,25 @@ jobs:
         run: |
           Compress-Archive -Path RestOS-POS -DestinationPath "${{ steps.meta.outputs.archive }}"
 
-      - name: Upload artifact (для проверки до релиза)
+      # ---- Inno Setup installer (одиночный setup.exe) ----
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer (Inno Setup)
+        working-directory: apps/pos
+        shell: cmd
+        run: |
+          mkdir installer_output
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.meta.outputs.version_clean }} installer.iss
+
+      - name: Upload artifacts (для проверки до релиза)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.meta.outputs.archive }}
-          path: apps/pos/dist/${{ steps.meta.outputs.archive }}
+          name: RestOS-POS-${{ steps.meta.outputs.version }}
+          path: |
+            apps/pos/dist/${{ steps.meta.outputs.archive }}
+            apps/pos/installer_output/${{ steps.meta.outputs.installer }}
           retention-days: 14
 
       # ---- релиз только для тегов v* ----
@@ -73,6 +91,8 @@ jobs:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: apps/pos/dist/${{ steps.meta.outputs.archive }}
+          files: |
+            apps/pos/dist/${{ steps.meta.outputs.archive }}
+            apps/pos/installer_output/${{ steps.meta.outputs.installer }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

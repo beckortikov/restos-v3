@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -17,10 +18,12 @@ from PySide6.QtWidgets import (
 
 from pos.resources.tokens import COLORS, RADIUS, SPACING
 
-# Версия приложения. Источник правды — `pos.__version__` (если появится),
-# либо хардкод здесь до Phase 5+.
-APP_VERSION = "0.10.0-mvp"
-APP_BUILD = "dev"
+# Версия приложения. SA-7 — синхронизируется с pos.main.APP_VERSION (один источник).
+try:
+    from pos.main import APP_VERSION
+except Exception:
+    APP_VERSION = "0.1.0"
+APP_BUILD = "release"
 SUPPORT_EMAIL = "support@restos.example"
 SUPPORT_PHONE = "+992 900 00 00 00"
 
@@ -45,7 +48,7 @@ class AboutSection(QWidget):
         )
         v.addWidget(title)
 
-        # App version card
+        # App version card + update button
         v.addWidget(self._info_card("RestOS — Кассир", [
             ("Версия", APP_VERSION),
             ("Сборка", APP_BUILD),
@@ -53,6 +56,26 @@ class AboutSection(QWidget):
             ("PySide6", pyside_version),
             ("Платформа", f"{platform.system()} {platform.release()}"),
         ]))
+
+        # SA-7 — Кнопка ручной проверки обновлений
+        update_row = QHBoxLayout()
+        update_row.addStretch(1)
+        check_btn = QPushButton("Проверить обновления")
+        check_btn.setFixedHeight(40)
+        check_btn.setMinimumWidth(220)
+        check_btn.setCursor(Qt.PointingHandCursor)
+        check_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  background: {COLORS['accent_orange']};"
+            f"  color: {COLORS['text_white']};"
+            f"  border: none; border-radius: {RADIUS['sm']}px;"
+            f"  padding: 0 18px; font-size: 11pt; font-weight: 700;"
+            f"}}"
+            f"QPushButton:hover {{ background: #B85812; }}"
+        )
+        check_btn.clicked.connect(self._on_check_update)
+        update_row.addWidget(check_btn)
+        v.addLayout(update_row)
 
         # Support card
         v.addWidget(self._info_card("Поддержка", [
@@ -121,6 +144,12 @@ class AboutSection(QWidget):
         v.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         h.addWidget(v, 1)
         return row
+
+    def _on_check_update(self) -> None:
+        """SA-7 — открывает UpdateDialog, ручной chek + download + install."""
+        from pos.screens.update_dialog import UpdateDialog
+        dlg = UpdateDialog(APP_VERSION, parent=self)
+        dlg.exec()
 
     def reload(self) -> None:
         """Не нужно — статичная секция."""
