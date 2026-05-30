@@ -23,13 +23,30 @@ ALLOWED_HOSTS = env.list(  # noqa: F405
     default=["127.0.0.1", "localhost", "*"],
 )
 
-# Embedded Postgres от pgserver на Windows не bundled с tzdata.
-# Django по умолчанию выполняет `SET TIME ZONE 'UTC'` на коннекте → ошибка
-# "invalid value for parameter TimeZone: UTC". Отключаем явное выставление.
+# Embedded Postgres от pgserver на Windows НЕ bundled с tzdata вообще.
+# Django при каждом коннекте делает `SET TIME ZONE '<name>'` — и UTC, и
+# Asia/Dushanbe, и любая именованная TZ упадёт с InvalidParameterValue.
+# Решение: полностью отключить _configure_timezone, оставив сервер на его
+# дефолтном offset'е. Время отдаём как есть; USE_TZ=False = naive datetime.
 USE_TZ = False
 TIME_ZONE = "Asia/Dushanbe"
-# Передать в connection — не пытаться менять серверный timezone:
-DATABASES["default"].setdefault("TIME_ZONE", None)  # noqa: F405
+
+# Monkey-patch psycopg backend: вырубаем установку TZ на коннекте.
+def _patch_postgres_skip_timezone() -> None:
+    try:
+        from django.db.backends.postgresql import base as _pg_base
+    except Exception:
+        return
+    if getattr(_pg_base.DatabaseWrapper, "_restos_tz_patched", False):
+        return
+
+    def _noop_configure_timezone(self, connection):  # noqa: ARG001
+        return False
+
+    _pg_base.DatabaseWrapper._configure_timezone = _noop_configure_timezone
+    _pg_base.DatabaseWrapper._restos_tz_patched = True
+
+_patch_postgres_skip_timezone()
 
 # CORS — в embedded режиме backend и POS на одной машине, расширять не надо.
 CORS_ALLOW_ALL_ORIGINS = True
