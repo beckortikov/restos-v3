@@ -68,6 +68,19 @@ jobs:
         run: |
           pyinstaller pos.spec --noconfirm --clean
 
+      - name: Verify tzdata bundled into dist
+        working-directory: apps/pos
+        shell: pwsh
+        run: |
+          $tz = "dist\RestOS-POS\_internal\pgserver\pginstall\share\timezone\Asia\Dushanbe"
+          if (Test-Path $tz) {
+            Write-Host "OK: $tz bundled ($((Get-Item $tz).Length) bytes)"
+          } else {
+            Write-Error "MISSING: $tz not bundled by PyInstaller!"
+            Get-ChildItem "dist\RestOS-POS\_internal\pgserver\pginstall\share" -ErrorAction SilentlyContinue
+            exit 1
+          }
+
       - name: Compute version
         id: meta
         shell: bash

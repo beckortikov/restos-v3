@@ -45,8 +45,15 @@ if BACKEND_DIR.exists():
     if mp.exists():
         datas.append((str(mp), "backend"))
 
-# pgserver — нужны его data-файлы (postgres bundle path resolver)
-datas += collect_data_files("pgserver")
+# pgserver — нужны ВСЕ его data-файлы (binaries, share/, tzdata).
+# include_py_files=False по умолчанию, но extensionless TZif файлы
+# (share/timezone/Asia/Dushanbe и т.п.) тоже могут отсеяться. Явно включаем
+# через includes=["**/*"] и исключаем только Python-исходники.
+datas += collect_data_files(
+    "pgserver",
+    includes=["**/*"],
+    excludes=["**/*.py", "**/*.pyc", "**/__pycache__/**"],
+)
 
 # Django + DRF + Unfold — их templates/static
 for pkg in ("django", "rest_framework", "unfold"):
