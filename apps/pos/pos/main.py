@@ -2,8 +2,16 @@ import logging
 import sys
 
 # Версия POS-клиента — отправляется в heartbeat для super-admin'а
-# (видно какая версия запущена у клиента)
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.4.0"
+
+# SA-7+ — на Windows скрыть console-окна subprocess'ов (postgres.exe, pg_ctl.exe).
+# Применяется до любых import'ов, которые могут spawn'ить child процессы.
+if sys.platform == "win32":
+    try:
+        from pos.services.embedded_backend import _patch_subprocess_hide_window
+        _patch_subprocess_hide_window()
+    except Exception:
+        pass
 
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer

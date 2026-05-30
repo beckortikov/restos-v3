@@ -24,6 +24,40 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+
+# Phase 8E — на Windows глобально скрыть console-окна для всех subprocess
+# (pgserver запускает postgres.exe / pg_ctl.exe — без патча всплывает чёрный cmd).
+def _patch_subprocess_hide_window() -> None:
+    if sys.platform != "win32":
+        return
+    import subprocess as _sp
+    if getattr(_sp.Popen, "_restos_silent_patched", False):
+        return
+    _CREATE_NO_WINDOW = 0x08000000
+    _orig = _sp.Popen
+
+    class _SilentPopen(_orig):
+        _restos_silent_patched = True
+
+        def __init__(self, *args, **kwargs):
+            flags = kwargs.get("creationflags", 0) or 0
+            kwargs["creationflags"] = int(flags) | _CREATE_NO_WINDOW
+            si = kwargs.get("startupinfo")
+            if si is None:
+                si = _sp.STARTUPINFO()
+            try:
+                si.dwFlags |= _sp.STARTF_USESHOWWINDOW
+                si.wShowWindow = 0  # SW_HIDE
+                kwargs["startupinfo"] = si
+            except Exception:
+                pass
+            super().__init__(*args, **kwargs)
+
+    _sp.Popen = _SilentPopen
+
+
+_patch_subprocess_hide_window()
+
 # Папка данных в LOCALAPPDATA/RestOS (Windows) или ~/.restos-pos (Mac/Linux).
 # Сюда кладётся pgdata/, license.json и т.д.
 def _data_dir() -> Path:

@@ -23,6 +23,14 @@ ALLOWED_HOSTS = env.list(  # noqa: F405
     default=["127.0.0.1", "localhost", "*"],
 )
 
+# Embedded Postgres от pgserver на Windows не bundled с tzdata.
+# Django по умолчанию выполняет `SET TIME ZONE 'UTC'` на коннекте → ошибка
+# "invalid value for parameter TimeZone: UTC". Отключаем явное выставление.
+USE_TZ = False
+TIME_ZONE = "Asia/Dushanbe"
+# Передать в connection — не пытаться менять серверный timezone:
+DATABASES["default"].setdefault("TIME_ZONE", None)  # noqa: F405
+
 # CORS — в embedded режиме backend и POS на одной машине, расширять не надо.
 CORS_ALLOW_ALL_ORIGINS = True
 
